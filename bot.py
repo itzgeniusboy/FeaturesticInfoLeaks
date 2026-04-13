@@ -279,4 +279,9 @@ def run_flask():
 if __name__ == "__main__":
     Thread(target=run_flask).start()
     print("Bot started...")
-    bot.infinity_polling()
+    try:
+        bot.remove_webhook()
+        bot.infinity_polling(skip_pending=True)
+    except Exception as e:
+        print(f"Error: {e}")
+        time.sleep(5)
