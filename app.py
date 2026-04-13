@@ -78,8 +78,20 @@ def search():
     try:
         result = get_number_details(phone)
         save_search(phone, result, request.remote_addr)
+        
+        # For debugging - show raw output
+        raw_output = result
+        
         total, unique = get_stats()
-        return render_template('index.html', result=result, phone=phone, history=get_history(), total=total, unique=unique)
+        now = datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%Y-%m-%d %H:%M:%S')
+        return render_template('index.html', 
+                             result=result, 
+                             raw_output=raw_output,
+                             phone=phone, 
+                             timestamp=now,
+                             history=get_history(), 
+                             total=total, 
+                             unique=unique)
     except Exception as e:
         total, unique = get_stats()
         return render_template('index.html', error=f"Error: {str(e)}", history=get_history(), total=total, unique=unique)

@@ -28,6 +28,15 @@
         <div class="result-content">
             {{ result | safe }}
         </div>
+        
+        {% if raw_output %}
+        <div class="raw-debug">
+            <details>
+                <summary>VIEW RAW DATA</summary>
+                <code>{{ raw_output }}</code>
+            </details>
+        </div>
+        {% endif %}
     </div>
     {% endif %}
 </div>

@@ -18,8 +18,12 @@ def get_number_details(phone_number):
             f"✅ <b>Search Result</b>\n"
             f"────────────────\n"
             f"📱 <b>Phone:</b> {phone_number}\n"
+            f"👤 <b>Name:</b> User Name (Sample)\n"
+            f"👨 <b>Father:</b> Father Name (Sample)\n"
+            f"🏠 <b>Address:</b> Sample Address, City, Country\n"
             f"🌍 <b>Country:</b> {country}\n"
             f"📞 <b>Carrier:</b> {carrier_name}\n"
+            f"🆔 <b>Telegram ID:</b> 123456789\n"
             f"────────────────\n"
             f"Developed By @FeaturesticLeaks"
         )
