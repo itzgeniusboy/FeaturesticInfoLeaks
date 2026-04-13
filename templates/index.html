@@ -1,0 +1,57 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="search-section">
+    <h1 class="display-title">DATABASE SEARCH</h1>
+    <p class="subtitle">Enter a phone number to retrieve detailed information from our global database.</p>
+    
+    <form action="{{ url_for('search') }}" method="get" class="search-form">
+        <div class="input-group">
+            <input type="text" name="phone" placeholder="91XXXXXXXXXX" value="{{ phone or '' }}" required class="search-input">
+            <button type="submit" class="search-button">LOOKUP</button>
+        </div>
+    </form>
+
+    {% if error %}
+    <div class="error-box">
+        <span class="status-label">ERROR</span>
+        <p>{{ error }}</p>
+    </div>
+    {% endif %}
+
+    {% if result %}
+    <div class="result-card">
+        <div class="card-header">
+            <span class="status-label">SUCCESS</span>
+            <span class="timestamp">{{ timestamp }}</span>
+        </div>
+        <div class="result-content">
+            {{ result | safe }}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="dashboard-grid">
+    <div class="stat-card">
+        <span class="col-header">TOTAL SEARCHES</span>
+        <div class="big-stat">{{ total }}</div>
+    </div>
+    <div class="stat-card">
+        <span class="col-header">UNIQUE NUMBERS</span>
+        <div class="big-stat">{{ unique }}</div>
+    </div>
+</div>
+
+<div class="recent-history">
+    <span class="col-header">RECENT ACTIVITY</span>
+    <div class="history-list">
+        {% for item in history[:10] %}
+        <div class="history-row">
+            <span class="data-value">{{ item[0] }}</span>
+            <span class="data-time">{{ item[1] }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

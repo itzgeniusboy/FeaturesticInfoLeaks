@@ -1,6 +1,6 @@
 {
-  "name": "Dual API Telegram Bot",
-  "description": "A comprehensive Telegram bot with dual API search, credits system, and referral tracking.",
+  "name": "Phone Lookup Web App",
+  "description": "A standalone web application for searching phone number details with history and statistics.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

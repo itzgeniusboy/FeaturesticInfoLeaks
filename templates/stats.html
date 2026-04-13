@@ -1,0 +1,37 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="display-title">SYSTEM ANALYTICS</h1>
+    <p class="subtitle">Real-time usage statistics and data distribution metrics.</p>
+</div>
+
+<div class="stats-overview">
+    <div class="stat-box">
+        <span class="col-header">LIFETIME SEARCHES</span>
+        <div class="big-stat">{{ total }}</div>
+    </div>
+    <div class="stat-box">
+        <span class="col-header">UNIQUE ENTITIES</span>
+        <div class="big-stat">{{ unique }}</div>
+    </div>
+</div>
+
+<div class="daily-breakdown">
+    <span class="col-header">DAILY ACTIVITY (LAST 7 DAYS)</span>
+    <div class="data-grid">
+        <div class="grid-header">
+            <span class="col-header">DATE</span>
+            <span class="col-header">COUNT</span>
+        </div>
+        <div class="grid-body">
+            {% for day in daily %}
+            <div class="data-row">
+                <span class="data-value">{{ day[0] }}</span>
+                <span class="data-value">{{ day[1] }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

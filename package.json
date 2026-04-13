@@ -4,11 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build",
-    "preview": "vite preview",
-    "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "dev": "python app.py",
+    "start": "python app.py",
+    "lint": "echo 'No linting for Python'"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

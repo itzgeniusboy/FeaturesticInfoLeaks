@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="display-title">SEARCH HISTORY</h1>
+    <p class="subtitle">A comprehensive log of the last 100 searches performed on this system.</p>
+</div>
+
+<div class="data-grid">
+    <div class="grid-header">
+        <span class="col-header">PHONE NUMBER</span>
+        <span class="col-header">TIMESTAMP</span>
+    </div>
+    <div class="grid-body">
+        {% for item in history %}
+        <div class="data-row">
+            <span class="data-value">{{ item[0] }}</span>
+            <span class="data-value">{{ item[1] }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

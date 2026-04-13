@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: telegram-bot
+    name: phone-lookup-app
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python bot.py
+    startCommand: python app.py

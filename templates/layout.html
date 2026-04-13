@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phone Lookup - Professional Data Retrieval</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:ital,wght@1,900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <header class="main-header">
+            <div class="logo">
+                <span class="logo-text">PHONE</span><span class="logo-accent">LOOKUP</span>
+            </div>
+            <nav class="main-nav">
+                <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' else '' }}">SEARCH</a>
+                <a href="{{ url_for('history_page') }}" class="{{ 'active' if request.endpoint == 'history_page' else '' }}">HISTORY</a>
+                <a href="{{ url_for('stats_page') }}" class="{{ 'active' if request.endpoint == 'stats_page' else '' }}">STATS</a>
+            </nav>
+        </header>
+
+        <main class="content">
+            {% block content %}{% endblock %}
+        </main>
+
+        <footer class="main-footer">
+            <div class="footer-line"></div>
+            <div class="footer-content">
+                <span class="meta-label">DEVELOPED BY @FEATURESTICLEAKS</span>
+                <span class="meta-label">v1.0.0</span>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>
