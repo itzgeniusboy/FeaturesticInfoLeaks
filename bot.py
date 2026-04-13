@@ -15,10 +15,6 @@ CHANNEL_2_LINK = "https://t.me/OneCoreEngine"
 CHANNEL_1_ID = "-1002278499725"
 CHANNEL_2_ID = "-1002265779523"
 
-# API 2 config
-API2_URL = "http://api.subhxcosmo.in/api"
-API2_KEY = "ITACHI"
-
 # Initialize bot
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
@@ -71,18 +67,8 @@ def detect_input_type(user_input):
         return "id"
     return "unknown"
 
-def call_api2(term):
-    try:
-        params = {"key": API2_KEY, "type": "tg", "term": term}
-        response = requests.get(API2_URL, params=params, timeout=10)
-        if response.status_code == 200:
-            return response.json()
-    except Exception:
-        pass
-    return None
-
-def merge_data(api1_res, api2_res):
-    # Logic to combine results
+def merge_data(api1_res):
+    # Logic to format API 1 results
     merged = {
         "phone": "N/A",
         "tg_id": "N/A",
@@ -100,18 +86,8 @@ def merge_data(api1_res, api2_res):
         merged["phone"] = data1.get("phone", "N/A")
         merged["country"] = data1.get("country", "N/A")
         merged["country_code"] = data1.get("country_code", "N/A")
-
-    if api2_res:
-        # Assuming API 2 returns a list or dict with these fields
-        # This structure depends on the actual API 2 response
-        merged["phone"] = api2_res.get("phone", merged["phone"])
-        merged["tg_id"] = api2_res.get("id", merged["tg_id"])
-        merged["name"] = api2_res.get("name", "N/A")
-        merged["username"] = api2_res.get("username", "N/A")
-        merged["country"] = api2_res.get("country", merged["country"])
-        merged["bio"] = api2_res.get("bio", "N/A")
-        merged["photo"] = "Yes" if api2_res.get("has_photo") else "No"
-        merged["last_seen"] = api2_res.get("last_seen", "recently")
+        merged["tg_id"] = data1.get("telegram_id", "N/A")
+        merged["username"] = data1.get("username", "N/A")
 
     return merged
 
@@ -279,19 +255,18 @@ def process_search(message):
     save_data(data)
 
     try:
-        # Dual API Call
+        # API 1 Call
         api1_res = get_number_details(user_input)
-        api2_res = call_api2(user_input)
         
-        if not api1_res and not api2_res:
-            # Refund if both fail
+        if not api1_res or api1_res.get("status") != "success":
+            # Refund if API fails
             data = load_data()
             data["users"][user_id]["credits"] += 1
             save_data(data)
             bot.edit_message_text("❌ Search failed! Credits have been refunded.", message.chat.id, wait_msg.message_id)
             return
 
-        merged = merge_data(api1_res, api2_res)
+        merged = merge_data(api1_res)
         
         output = (
             "✅ Success!\n\n"
