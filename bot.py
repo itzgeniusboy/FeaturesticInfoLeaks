@@ -110,6 +110,8 @@ def check_join(call):
     else:
         bot.answer_callback_query(call.id, "❌ Abhi bhi join nahi kiya!", show_alert=True)
 
+import concurrent.futures
+
 # ===== ADMIN COMMANDS =====
 
 @bot.message_handler(commands=['givecredits'])
@@ -203,6 +205,25 @@ def remove_unlimited(message):
     except:
         bot.send_message(message.chat.id, "Usage: /removeunlimited <user_id>")
 
+@bot.message_handler(func=lambda m: m.text and (m.text.startswith('/info') or m.text.isdigit()))
+def handle_direct_search(message):
+    if not is_subscribed(message.from_user.id):
+        start(message)
+        return
+    
+    # Extract number
+    if message.text.startswith('/info'):
+        number = message.text.replace('/info', '').strip()
+    else:
+        number = message.text.strip()
+    
+    if not number:
+        return
+        
+    # Create a dummy message object to reuse process_search logic or just call it
+    message.text = number
+    process_search(message)
+
 @bot.message_handler(func=lambda m: True)
 def handle_all(message):
     user_id = str(message.from_user.id)
@@ -293,25 +314,25 @@ def process_search(message):
 
     wait_msg = bot.send_message(message.chat.id, "⏳ Searching... Please wait.")
     
-    # Deduct credit using logic
-    deduct_credit(user_id, user_data)
-    
-    data["stats"]["total_searches"] += 1
-    data["users"][user_id]["search_history"].append(user_input)
-    save_data(data)
-
     try:
-        # API Call
-        res = get_number_details(user_input)
+        # API Call with 10s Timeout using ThreadPoolExecutor
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(get_number_details, user_input)
+            try:
+                res = future.result(timeout=10)
+            except concurrent.futures.TimeoutError:
+                bot.edit_message_text("❌ Timeout! API not responding. Try again later.", message.chat.id, wait_msg.message_id)
+                return
         
         if not res or res.get("status") != "success":
-            # Refund if API fails and not unlimited
-            if not is_unlimited:
-                data = load_data()
-                data["users"][user_id]["credits"] += 1
-                save_data(data)
-            bot.edit_message_text("❌ Search failed! Credits have been refunded.", message.chat.id, wait_msg.message_id)
+            bot.edit_message_text("❌ No data found for this number!", message.chat.id, wait_msg.message_id)
             return
+
+        # Deduct credit only if API was successful
+        deduct_credit(user_id, user_data)
+        data["stats"]["total_searches"] += 1
+        data["users"][user_id]["search_history"].append(user_input)
+        save_data(data)
 
         info = res.get("data", {})
         points_display = "Unlimited" if (int(user_id) == ADMIN_ID or user_data.get("unlimited")) else f"{data['users'][user_id]['credits']}"
@@ -331,12 +352,7 @@ def process_search(message):
         bot.edit_message_text(output, message.chat.id, wait_msg.message_id)
         
     except Exception as e:
-        # Refund on error
-        if not is_unlimited:
-            data = load_data()
-            data["users"][user_id]["credits"] += 1
-            save_data(data)
-        bot.edit_message_text(f"❌ An error occurred. Credits refunded.", message.chat.id, wait_msg.message_id)
+        bot.edit_message_text(f"❌ Error: {str(e)}", message.chat.id, wait_msg.message_id)
 
 # ===== FLASK WEB SERVER =====
 
