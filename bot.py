@@ -8,7 +8,7 @@ import pytz
 from num import get_number_details
 
 # Configuration
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
+BOT_TOKEN = "8741964335:AAF7wdSGmcVdEadFw3RlryIA9yeBUuUsA6w"
 ADMIN_ID = 1969067694
 CHANNEL_1_LINK = "https://t.me/FeaturesticLeaks"
 CHANNEL_2_LINK = "https://t.me/OneCoreEngine"
