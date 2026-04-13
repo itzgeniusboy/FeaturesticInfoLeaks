@@ -110,7 +110,68 @@ def check_join(call):
     else:
         bot.answer_callback_query(call.id, "❌ Abhi bhi join nahi kiya!", show_alert=True)
 
-@bot.message_handler(commands=['unlimited'])
+# ===== ADMIN COMMANDS =====
+
+@bot.message_handler(commands=['givecredits'])
+def give_credits(message):
+    if message.from_user.id != ADMIN_ID: return
+    try:
+        args = message.text.split()
+        target_id = args[1]
+        amount = int(args[2])
+        data = load_data()
+        if target_id in data["users"]:
+            data["users"][target_id]["credits"] += amount
+            save_data(data)
+            bot.send_message(message.chat.id, f"✅ Added {amount} credits to {target_id}")
+            try:
+                bot.send_message(target_id, f"💰 Admin has given you {amount} credits!")
+            except: pass
+        else:
+            bot.send_message(message.chat.id, "❌ User not found.")
+    except:
+        bot.send_message(message.chat.id, "Usage: /givecredits <user_id> <amount>")
+
+@bot.message_handler(commands=['removecredits'])
+def remove_credits(message):
+    if message.from_user.id != ADMIN_ID: return
+    try:
+        args = message.text.split()
+        target_id = args[1]
+        amount = int(args[2])
+        data = load_data()
+        if target_id in data["users"]:
+            data["users"][target_id]["credits"] = max(0, data["users"][target_id]["credits"] - amount)
+            save_data(data)
+            bot.send_message(message.chat.id, f"✅ Removed {amount} credits from {target_id}")
+        else:
+            bot.send_message(message.chat.id, "❌ User not found.")
+    except:
+        bot.send_message(message.chat.id, "Usage: /removecredits <user_id> <amount>")
+
+@bot.message_handler(commands=['checkbalance'])
+def check_balance(message):
+    if message.from_user.id != ADMIN_ID: return
+    try:
+        args = message.text.split()
+        target_id = args[1]
+        data = load_data()
+        if target_id in data["users"]:
+            user = data["users"][target_id]
+            status = "Unlimited" if user.get("unlimited") else "Normal"
+            text = (
+                f"📊 User Balance Check\n\n"
+                f"🆔 User ID: {target_id}\n"
+                f"💎 Credits: {user.get('credits', 0)}\n"
+                f"⚡ Status: {status}"
+            )
+            bot.send_message(message.chat.id, text)
+        else:
+            bot.send_message(message.chat.id, "❌ User not found.")
+    except:
+        bot.send_message(message.chat.id, "Usage: /checkbalance <user_id>")
+
+@bot.message_handler(commands=['setunlimited', 'unlimited'])
 def set_unlimited(message):
     if message.from_user.id != ADMIN_ID: return
     try:
@@ -124,9 +185,9 @@ def set_unlimited(message):
         else:
             bot.send_message(message.chat.id, "❌ User not found.")
     except:
-        bot.send_message(message.chat.id, "Usage: /unlimited <user_id>")
+        bot.send_message(message.chat.id, "Usage: /setunlimited <user_id>")
 
-@bot.message_handler(commands=['remove_unlimited'])
+@bot.message_handler(commands=['removeunlimited', 'remove_unlimited'])
 def remove_unlimited(message):
     if message.from_user.id != ADMIN_ID: return
     try:
@@ -140,7 +201,7 @@ def remove_unlimited(message):
         else:
             bot.send_message(message.chat.id, "❌ User not found.")
     except:
-        bot.send_message(message.chat.id, "Usage: /remove_unlimited <user_id>")
+        bot.send_message(message.chat.id, "Usage: /removeunlimited <user_id>")
 
 @bot.message_handler(func=lambda m: True)
 def handle_all(message):
@@ -158,11 +219,12 @@ def handle_all(message):
     
     elif text == "👤 Profile":
         user = data["users"].get(user_id, {})
-        status = "Unlimited" if user.get("unlimited") else "Normal"
+        status = "Unlimited" if (int(user_id) == ADMIN_ID or user.get("unlimited")) else "Normal"
+        points = "Unlimited" if (int(user_id) == ADMIN_ID or user.get("unlimited")) else f"{user.get('credits', 0)}"
         profile_text = (
             f"👤 User Profile\n\n"
             f"🆔 User ID: {user_id}\n"
-            f"💎 Credits: {user.get('credits', 0)}\n"
+            f"💎 Credits: {points}\n"
             f"⚡ Status: {status}\n"
             f"🤝 Referrals: {user.get('referrals', 0)}\n"
             f"📅 Joined: {user.get('join_date', 'N/A')}"
@@ -171,7 +233,7 @@ def handle_all(message):
 
     elif text == "💰 Points":
         user = data["users"].get(user_id, {})
-        points = "Unlimited" if user.get("unlimited") else f"{user.get('credits', 0)} Credits"
+        points = "Unlimited" if (int(user_id) == ADMIN_ID or user.get("unlimited")) else f"{user.get('credits', 0)} Credits"
         bot.send_message(message.chat.id, f"💰 Current Balance: {points}")
 
     elif text == "🎁 Referral":
@@ -200,6 +262,20 @@ def handle_all(message):
     elif text == "🛒 Buy":
         bot.send_message(message.chat.id, "🛒 Premium Plans:\n\n1. 50 Credits - ₹50\n2. 150 Credits - ₹100\n3. Unlimited (1 Month) - ₹250\n\nContact @FeaturesticLeaks to buy.")
 
+def has_credits(user_id, user_data):
+    if int(user_id) == ADMIN_ID:
+        return True
+    if user_data.get('unlimited', False):
+        return True
+    return user_data.get('credits', 0) >= 1
+
+def deduct_credit(user_id, user_data):
+    if int(user_id) == ADMIN_ID:
+        return
+    if user_data.get('unlimited', False):
+        return
+    user_data['credits'] -= 1
+
 def process_search(message):
     user_id = str(message.from_user.id)
     user_input = message.text.strip()
@@ -210,17 +286,15 @@ def process_search(message):
         return
 
     user_data = data["users"].get(user_id, {})
-    is_unlimited = user_data.get("unlimited", False)
     
-    if not is_unlimited and user_data.get("credits", 0) < 1:
+    if not has_credits(user_id, user_data):
         bot.send_message(message.chat.id, "❌ Aapke paas credits nahi hain! Please refer friends or buy credits.")
         return
 
     wait_msg = bot.send_message(message.chat.id, "⏳ Searching... Please wait.")
     
-    # Deduct credit if not unlimited
-    if not is_unlimited:
-        data["users"][user_id]["credits"] -= 1
+    # Deduct credit using logic
+    deduct_credit(user_id, user_data)
     
     data["stats"]["total_searches"] += 1
     data["users"][user_id]["search_history"].append(user_input)
@@ -240,7 +314,7 @@ def process_search(message):
             return
 
         info = res.get("data", {})
-        points_display = "Unlimited" if is_unlimited else f"{data['users'][user_id]['credits']}"
+        points_display = "Unlimited" if (int(user_id) == ADMIN_ID or user_data.get("unlimited")) else f"{data['users'][user_id]['credits']}"
         
         output = (
             "✅ Success!\n\n"
