@@ -6,8 +6,13 @@ import pytz
 from num import get_number_details
 
 app = Flask(__name__)
-DATA_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(DATA_DIR, 'searches.db')
+
+# Vercel filesystem is read-only. Use /tmp for SQLite if running on Vercel.
+if os.environ.get('VERCEL'):
+    DB_PATH = '/tmp/searches.db'
+else:
+    DATA_DIR = os.path.dirname(os.path.abspath(__file__))
+    DB_PATH = os.path.join(DATA_DIR, 'searches.db')
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -26,6 +31,9 @@ def init_db():
     c.execute("INSERT OR IGNORE INTO stats (id, total_searches) VALUES (1, 0)")
     conn.commit()
     conn.close()
+
+# Initialize DB on startup
+init_db()
 
 def save_search(phone, result, ip):
     conn = sqlite3.connect(DB_PATH)
