@@ -5,41 +5,73 @@ from flask import Flask
 from threading import Thread
 from datetime import datetime
 import pytz
+import concurrent.futures
 from num import get_number_details
 
-# Configuration
+# ===== CONFIG =====
 BOT_TOKEN = "8741964335:AAF7wdSGmcVdEadFw3RlryIA9yeBUuUsA6w"
-ADMIN_ID = 1969067694
+ADMIN_ID = 1969067694  # INTEGER
 CHANNEL_1_LINK = "https://t.me/FeaturesticLeaks"
 CHANNEL_2_LINK = "https://t.me/OneCoreEngine"
 CHANNEL_1_ID = "-1002278499725"
 CHANNEL_2_ID = "-1002265779523"
 CREDIT_LINE = "Developed By @FeaturesticLeaks"
 
-# Initialize bot
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
-
-DB_FILE = "database.json"
+DATA_FILE = "database.json"
 IST = pytz.timezone('Asia/Kolkata')
 
-# ===== DATA MANAGEMENT =====
-
+# ===== DATABASE =====
 def load_data():
-    if not os.path.exists(DB_FILE):
-        return {"users": {}, "stats": {"total_searches": 0, "total_users": 0}}
-    with open(DB_FILE, "r") as f:
-        try:
-            return json.load(f)
-        except:
-            return {"users": {}, "stats": {"total_searches": 0, "total_users": 0}}
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r") as f:
+            try:
+                return json.load(f)
+            except:
+                return {"users": {}, "stats": {"total_searches": 0, "total_users": 0}}
+    return {"users": {}, "stats": {"total_searches": 0, "total_users": 0}}
 
 def save_data(data):
-    with open(DB_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=4)
 
-# ===== UTILITIES =====
+# ===== CHECK CREDITS =====
+def has_credits(user_id):
+    if user_id == ADMIN_ID:
+        return True
+    data = load_data()
+    uid = str(user_id)
+    user = data.get("users", {}).get(uid, {})
+    if user.get("unlimited", False):
+        return True
+    return user.get('credits', 0) >= 1
 
+def deduct_credit(user_id):
+    if user_id == ADMIN_ID:
+        return
+    data = load_data()
+    uid = str(user_id)
+    if uid in data.get("users", {}):
+        if data["users"][uid].get("unlimited", False):
+            return
+        data["users"][uid]['credits'] = max(0, data["users"][uid].get('credits', 0) - 1)
+        save_data(data)
+
+def get_credits_display(user_id):
+    if user_id == ADMIN_ID:
+        return "Unlimited"
+    data = load_data()
+    uid = str(user_id)
+    user = data.get("users", {}).get(uid, {})
+    if user.get("unlimited", False):
+        return "Unlimited"
+    return user.get('credits', 0)
+
+def get_current_time():
+    return datetime.now(IST).strftime('%d-%m-%Y %I:%M:%S %p')
+
+# ===== FORCE SUBSCRIBE =====
 def is_subscribed(user_id):
     if user_id == ADMIN_ID:
         return True
@@ -47,74 +79,123 @@ def is_subscribed(user_id):
         status1 = bot.get_chat_member(CHANNEL_1_ID, user_id).status
         status2 = bot.get_chat_member(CHANNEL_2_ID, user_id).status
         return status1 in ['member', 'administrator', 'creator'] and status2 in ['member', 'administrator', 'creator']
-    except Exception:
+    except:
         return False
 
-def main_menu():
-    markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
-    markup.add(
-        types.KeyboardButton("🔍 Search"), types.KeyboardButton("👤 Profile"),
-        types.KeyboardButton("💰 Points"), types.KeyboardButton("🎁 Referral"),
-        types.KeyboardButton("🛒 Buy"), types.KeyboardButton("📜 History"),
-        types.KeyboardButton("📞 Support"), types.KeyboardButton("❓ Help")
-    )
-    return markup
+# ===== SEARCH HANDLER =====
+@bot.message_handler(func=lambda m: m.text and (m.text.isdigit() or m.text.startswith('/info')))
+def handle_search(message):
+    user_id = message.from_user.id
+    if not is_subscribed(user_id):
+        return start_cmd(message)
+    
+    number = message.text.replace('/info', '').strip()
+    if not number.isdigit():
+        return bot.reply_to(message, "❌ Only phone numbers allowed. Example: 9852108915")
+    
+    if not has_credits(user_id):
+        return bot.reply_to(message, "❌ Aapke paas credits nahi hain! Refer friends to earn.")
+    
+    msg = bot.reply_to(message, "⏳ Searching... Please wait")
+    
+    try:
+        # API Call with 10s Timeout
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(get_number_details, number)
+            try:
+                result = future.result(timeout=10)
+            except concurrent.futures.TimeoutError:
+                bot.edit_message_text("❌ Timeout! API not responding. Try again later.", message.chat.id, msg.message_id)
+                return
+        
+        if result and result.get("status") == "success":
+            info = result.get("data", {})
+            output = f"""✅ Success!
 
-# ===== BOT HANDLERS =====
+📱 Phone Number: {number}
+🆔 Telegram ID: {info.get('telegram_id', 'N/A')}
+👤 Name: {info.get('name', 'Unknown')}
+🌍 Country: {info.get('country', 'N/A')}
+📞 Code: {info.get('country_code', 'N/A')}
 
+💎 Remaining Points: {get_credits_display(user_id)}
+🕐 Time: {get_current_time()}
+
+{CREDIT_LINE}"""
+            
+            bot.edit_message_text(output, message.chat.id, msg.message_id)
+            deduct_credit(user_id)
+            
+            # Update stats
+            data = load_data()
+            data["stats"]["total_searches"] += 1
+            uid = str(user_id)
+            if uid in data["users"]:
+                data["users"][uid]["search_history"].append(number)
+            save_data(data)
+        else:
+            bot.edit_message_text("❌ No data found for this number!", message.chat.id, msg.message_id)
+            
+    except Exception as e:
+        bot.edit_message_text(f"❌ Error: {str(e)}", message.chat.id, msg.message_id)
+
+# ===== START COMMAND =====
 @bot.message_handler(commands=['start'])
-def start(message):
-    user_id = str(message.from_user.id)
+def start_cmd(message):
+    user_id = message.from_user.id
+    uid = str(user_id)
+    
     data = load_data()
     
     # Handle Referral
     args = message.text.split()
     referrer_id = args[1] if len(args) > 1 else None
     
-    if user_id not in data["users"]:
-        data["users"][user_id] = {
-            "credits": 5,
-            "unlimited": True if int(user_id) == ADMIN_ID else False,
+    if uid not in data["users"]:
+        data["users"][uid] = {
+            "credits": 5, 
+            "unlimited": True if user_id == ADMIN_ID else False,
             "referrals": 0,
             "referred_by": referrer_id,
             "search_history": [],
-            "join_date": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
+            "join_date": get_current_time()
         }
         data["stats"]["total_users"] += 1
         
-        if referrer_id and referrer_id in data["users"] and referrer_id != user_id:
+        if referrer_id and referrer_id in data["users"] and referrer_id != uid:
             data["users"][referrer_id]["credits"] += 5
             data["users"][referrer_id]["referrals"] += 1
             try:
-                bot.send_message(referrer_id, f"🎁 Referral Successful! You got 5 credits for inviting {message.from_user.first_name}.")
+                bot.send_message(referrer_id, f"🎁 Referral Successful! You got 5 credits.")
             except: pass
             
         save_data(data)
-
-    if not is_subscribed(message.from_user.id):
+    
+    if not is_subscribed(user_id):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("Channel 1", url=CHANNEL_1_LINK))
         markup.add(types.InlineKeyboardButton("Channel 2", url=CHANNEL_2_LINK))
         markup.add(types.InlineKeyboardButton("✅ Check Join", callback_data="check_join"))
         bot.send_message(message.chat.id, "❌ Aapne dono channels join nahi kiye hain!\n\nPlease join both channels to use the bot.", reply_markup=markup)
-        return
-
-    bot.send_message(message.chat.id, f"Welcome {message.from_user.first_name}! Use the menu below to navigate.", reply_markup=main_menu())
+    else:
+        markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+        markup.add(types.KeyboardButton("🔍 Search"), types.KeyboardButton("👤 Profile"))
+        markup.add(types.KeyboardButton("💰 Points"), types.KeyboardButton("🎁 Referral"))
+        markup.add(types.KeyboardButton("📞 Support"), types.KeyboardButton("❓ Help"))
+        
+        bot.send_message(message.chat.id, f"Welcome! Send phone number to search.\nCredits: {get_credits_display(user_id)}", reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: call.data == "check_join")
 def check_join(call):
     if is_subscribed(call.from_user.id):
-        bot.answer_callback_query(call.id, "✅ Success! You can now use the bot.")
-        bot.edit_message_text("Aapne channels join kar liye hain! Ab aap bot use kar sakte hain.", call.message.chat.id, call.message.message_id)
-        bot.send_message(call.message.chat.id, "Main Menu:", reply_markup=main_menu())
+        bot.answer_callback_query(call.id, "✅ Success!")
+        bot.edit_message_text("Aapne channels join kar liye hain!", call.message.chat.id, call.message.message_id)
+        start_cmd(call.message)
     else:
-        bot.answer_callback_query(call.id, "❌ Abhi bhi join nahi kiya!", show_alert=True)
-
-import concurrent.futures
+        bot.answer_callback_query(call.id, "❌ Join both channels first!", show_alert=True)
 
 # ===== ADMIN COMMANDS =====
-
-@bot.message_handler(commands=['givecredits'])
+@bot.message_handler(commands=['givecredits', 'add'])
 def give_credits(message):
     if message.from_user.id != ADMIN_ID: return
     try:
@@ -126,54 +207,12 @@ def give_credits(message):
             data["users"][target_id]["credits"] += amount
             save_data(data)
             bot.send_message(message.chat.id, f"✅ Added {amount} credits to {target_id}")
-            try:
-                bot.send_message(target_id, f"💰 Admin has given you {amount} credits!")
-            except: pass
         else:
             bot.send_message(message.chat.id, "❌ User not found.")
     except:
-        bot.send_message(message.chat.id, "Usage: /givecredits <user_id> <amount>")
+        bot.send_message(message.chat.id, "Usage: /add <user_id> <amount>")
 
-@bot.message_handler(commands=['removecredits'])
-def remove_credits(message):
-    if message.from_user.id != ADMIN_ID: return
-    try:
-        args = message.text.split()
-        target_id = args[1]
-        amount = int(args[2])
-        data = load_data()
-        if target_id in data["users"]:
-            data["users"][target_id]["credits"] = max(0, data["users"][target_id]["credits"] - amount)
-            save_data(data)
-            bot.send_message(message.chat.id, f"✅ Removed {amount} credits from {target_id}")
-        else:
-            bot.send_message(message.chat.id, "❌ User not found.")
-    except:
-        bot.send_message(message.chat.id, "Usage: /removecredits <user_id> <amount>")
-
-@bot.message_handler(commands=['checkbalance'])
-def check_balance(message):
-    if message.from_user.id != ADMIN_ID: return
-    try:
-        args = message.text.split()
-        target_id = args[1]
-        data = load_data()
-        if target_id in data["users"]:
-            user = data["users"][target_id]
-            status = "Unlimited" if user.get("unlimited") else "Normal"
-            text = (
-                f"📊 User Balance Check\n\n"
-                f"🆔 User ID: {target_id}\n"
-                f"💎 Credits: {user.get('credits', 0)}\n"
-                f"⚡ Status: {status}"
-            )
-            bot.send_message(message.chat.id, text)
-        else:
-            bot.send_message(message.chat.id, "❌ User not found.")
-    except:
-        bot.send_message(message.chat.id, "Usage: /checkbalance <user_id>")
-
-@bot.message_handler(commands=['setunlimited', 'unlimited'])
+@bot.message_handler(commands=['unlimited'])
 def set_unlimited(message):
     if message.from_user.id != ADMIN_ID: return
     try:
@@ -187,190 +226,61 @@ def set_unlimited(message):
         else:
             bot.send_message(message.chat.id, "❌ User not found.")
     except:
-        bot.send_message(message.chat.id, "Usage: /setunlimited <user_id>")
+        bot.send_message(message.chat.id, "Usage: /unlimited <user_id>")
 
-@bot.message_handler(commands=['removeunlimited', 'remove_unlimited'])
-def remove_unlimited(message):
-    if message.from_user.id != ADMIN_ID: return
-    try:
-        args = message.text.split()
-        target_id = args[1]
-        data = load_data()
-        if target_id in data["users"]:
-            data["users"][target_id]["unlimited"] = False
-            save_data(data)
-            bot.send_message(message.chat.id, f"✅ Unlimited status removed for {target_id}.")
-        else:
-            bot.send_message(message.chat.id, "❌ User not found.")
-    except:
-        bot.send_message(message.chat.id, "Usage: /removeunlimited <user_id>")
-
-@bot.message_handler(func=lambda m: m.text and (m.text.startswith('/info') or m.text.isdigit()))
-def handle_direct_search(message):
-    if not is_subscribed(message.from_user.id):
-        start(message)
-        return
-    
-    # Extract number
-    if message.text.startswith('/info'):
-        number = message.text.replace('/info', '').strip()
-    else:
-        number = message.text.strip()
-    
-    if not number:
-        return
-        
-    # Create a dummy message object to reuse process_search logic or just call it
-    message.text = number
-    process_search(message)
-
+# ===== BUTTON HANDLERS =====
 @bot.message_handler(func=lambda m: True)
-def handle_all(message):
-    user_id = str(message.from_user.id)
-    if not is_subscribed(message.from_user.id):
-        start(message)
-        return
-
-    text = message.text
-    data = load_data()
+def handle_buttons(message):
+    user_id = message.from_user.id
+    if not is_subscribed(user_id):
+        return start_cmd(message)
     
+    text = message.text
     if text == "🔍 Search":
         bot.send_message(message.chat.id, "📱 Send phone number to search\nExample: 9852108915")
-        bot.register_next_step_handler(message, process_search)
     
     elif text == "👤 Profile":
-        user = data["users"].get(user_id, {})
-        status = "Unlimited" if (int(user_id) == ADMIN_ID or user.get("unlimited")) else "Normal"
-        points = "Unlimited" if (int(user_id) == ADMIN_ID or user.get("unlimited")) else f"{user.get('credits', 0)}"
-        profile_text = (
-            f"👤 User Profile\n\n"
-            f"🆔 User ID: {user_id}\n"
-            f"💎 Credits: {points}\n"
-            f"⚡ Status: {status}\n"
-            f"🤝 Referrals: {user.get('referrals', 0)}\n"
-            f"📅 Joined: {user.get('join_date', 'N/A')}"
-        )
+        uid = str(user_id)
+        data = load_data()
+        user = data["users"].get(uid, {})
+        
+        profile_text = f"""👤 PROFILE
+
+🆔 ID: {user_id}
+💎 Points: {get_credits_display(user_id)}
+👥 Referrals: {user.get('referrals', 0)}
+👑 Status: {'Unlimited' if (user_id == ADMIN_ID or user.get('unlimited')) else 'Normal'}"""
         bot.send_message(message.chat.id, profile_text)
 
     elif text == "💰 Points":
-        user = data["users"].get(user_id, {})
-        points = "Unlimited" if (int(user_id) == ADMIN_ID or user.get("unlimited")) else f"{user.get('credits', 0)} Credits"
-        bot.send_message(message.chat.id, f"💰 Current Balance: {points}")
+        bot.send_message(message.chat.id, f"💎 Your Points: {get_credits_display(user_id)}")
 
     elif text == "🎁 Referral":
         ref_link = f"https://t.me/{(bot.get_me().username)}?start={user_id}"
-        ref_text = (
-            f"🎁 Referral System\n\n"
-            f"Invite your friends and earn 5 credits per referral!\n\n"
-            f"Your Link: `{ref_link}`"
-        )
-        bot.send_message(message.chat.id, ref_text, parse_mode="Markdown")
-
-    elif text == "📜 History":
-        history = data["users"].get(user_id, {}).get("search_history", [])[-10:]
-        if not history:
-            bot.send_message(message.chat.id, "📜 No search history found.")
-        else:
-            h_text = "📜 Last 10 Searches:\n\n" + "\n".join([f"• {h}" for h in history])
-            bot.send_message(message.chat.id, h_text)
+        bot.send_message(message.chat.id, f"🎁 Your Referral Link:\n`{ref_link}`", parse_mode="Markdown")
 
     elif text == "📞 Support":
-        bot.send_message(message.chat.id, f"📞 Support: @FeaturesticLeaks")
+        bot.send_message(message.chat.id, "📞 Support: @FeaturesticLeaks")
 
     elif text == "❓ Help":
-        bot.send_message(message.chat.id, "❓ Help Section:\n\n1. Use Search to find details.\n2. Each search costs 1 credit (unless Unlimited).\n3. Refer friends to earn more credits.")
+        bot.send_message(message.chat.id, "🔍 Send any phone number to search!\nExample: 9852108915")
 
-    elif text == "🛒 Buy":
-        bot.send_message(message.chat.id, "🛒 Premium Plans:\n\n1. 50 Credits - ₹50\n2. 150 Credits - ₹100\n3. Unlimited (1 Month) - ₹250\n\nContact @FeaturesticLeaks to buy.")
-
-def has_credits(user_id, user_data):
-    if int(user_id) == ADMIN_ID:
-        return True
-    if user_data.get('unlimited', False):
-        return True
-    return user_data.get('credits', 0) >= 1
-
-def deduct_credit(user_id, user_data):
-    if int(user_id) == ADMIN_ID:
-        return
-    if user_data.get('unlimited', False):
-        return
-    user_data['credits'] -= 1
-
-def process_search(message):
-    user_id = str(message.from_user.id)
-    user_input = message.text.strip()
-    data = load_data()
-    
-    if not user_input.isdigit():
-        bot.send_message(message.chat.id, "❌ Only phone numbers allowed. Send: 9852108915")
-        return
-
-    user_data = data["users"].get(user_id, {})
-    
-    if not has_credits(user_id, user_data):
-        bot.send_message(message.chat.id, "❌ Aapke paas credits nahi hain! Please refer friends or buy credits.")
-        return
-
-    wait_msg = bot.send_message(message.chat.id, "⏳ Searching... Please wait.")
-    
-    try:
-        # API Call with 10s Timeout using ThreadPoolExecutor
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(get_number_details, user_input)
-            try:
-                res = future.result(timeout=10)
-            except concurrent.futures.TimeoutError:
-                bot.edit_message_text("❌ Timeout! API not responding. Try again later.", message.chat.id, wait_msg.message_id)
-                return
-        
-        if not res or res.get("status") != "success":
-            bot.edit_message_text("❌ No data found for this number!", message.chat.id, wait_msg.message_id)
-            return
-
-        # Deduct credit only if API was successful
-        deduct_credit(user_id, user_data)
-        data["stats"]["total_searches"] += 1
-        data["users"][user_id]["search_history"].append(user_input)
-        save_data(data)
-
-        info = res.get("data", {})
-        points_display = "Unlimited" if (int(user_id) == ADMIN_ID or user_data.get("unlimited")) else f"{data['users'][user_id]['credits']}"
-        
-        output = (
-            "✅ Success!\n\n"
-            f"📱 Phone Number: {info.get('phone', user_input)}\n"
-            f"🆔 Telegram ID: {info.get('telegram_id', 'N/A')}\n"
-            f"👤 Name: {info.get('name', 'N/A')}\n"
-            f"🌍 Country: {info.get('country', 'N/A')}\n"
-            f"📞 Code: {info.get('country_code', 'N/A')}\n\n"
-            f"💎 Remaining Points: {points_display}\n"
-            f"🕐 Time: {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-            f"{CREDIT_LINE}"
-        )
-        
-        bot.edit_message_text(output, message.chat.id, wait_msg.message_id)
-        
-    except Exception as e:
-        bot.edit_message_text(f"❌ Error: {str(e)}", message.chat.id, wait_msg.message_id)
-
-# ===== FLASK WEB SERVER =====
-
+# ===== WEB SERVER =====
 @app.route('/')
 def home():
-    return "Bot is Running!"
+    return "Bot Running!"
 
-def run_flask():
-    port = int(os.environ.get("PORT", 3000))
+def run():
+    port = int(os.environ.get('PORT', 3000))
     app.run(host='0.0.0.0', port=port)
 
 # ===== MAIN =====
-
 if __name__ == "__main__":
-    Thread(target=run_flask).start()
-    print("Bot started...")
     try:
         bot.remove_webhook()
+        time.sleep(1)
+        Thread(target=run).start()
+        print("✅ Bot Started!")
         bot.infinity_polling(skip_pending=True)
     except Exception as e:
         print(f"Error: {e}")
