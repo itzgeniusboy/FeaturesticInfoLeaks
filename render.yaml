@@ -1,9 +1,6 @@
 services:
   - type: web
-    name: dual-api-bot
+    name: telegram-bot
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
-    envVars:
-      - key: PORT
-        value: 3000
