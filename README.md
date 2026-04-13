@@ -1,11 +1,24 @@
-<div align="center">
+# Dual API Telegram Bot
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+A powerful Telegram bot that searches for user details using two different APIs.
 
-  <h1>Built with AI Studio</h2>
+## Features
+- **Dual API Search**: Combines results from two sources.
+- **Force Subscribe**: Ensures users join your channels.
+- **Credits System**: 5 free credits for new users, 1 credit per search.
+- **Referral System**: Earn 5 credits per friend invited.
+- **Admin Panel**: Broadcast, stats, and credit management.
+- **History**: Tracks last 10 searches.
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+## Configuration
+Update `bot.py` with your:
+- `BOT_TOKEN`
+- `ADMIN_ID`
+- `CHANNEL_ID`s
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+## Deployment
+This bot is ready for deployment on Render, Railway, or any Docker-compatible host.
+- **Health Check**: `/` endpoint returns "Bot is Running!"
 
-</div>
+## Credits
+Developed By @FeaturesticLeaks
